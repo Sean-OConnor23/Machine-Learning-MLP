@@ -90,4 +90,4 @@ def wav_extract(wav_in):
         print("MFCC_" + str(index) + " Variance --> " + str(temp_var))
         index += 1
 
-wav_extract("blues.00002.wav")
+wav_extract("data/genres_original/blues/blues.00002.wav")

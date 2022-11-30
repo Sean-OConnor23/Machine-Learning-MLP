@@ -1,7 +1,7 @@
-from __future__ import print_function, division
 import numpy as np
 import math
 import pandas as pd
+import matplotlib.pyplot as plt
 
 def accuracy_score(y_true, y_pred):
     """ Compare y_true to y_pred and return the accuracy """
@@ -77,9 +77,9 @@ class MultilayerPerceptron():
     learning_rate: float
         The step length that will be used when updating the weights.
     """
-    def __init__(self, n_hidden, n_iterations=3000, learning_rate=0.01):
+    def __init__(self, n_hidden, n_epochs=3000, learning_rate=0.01):
         self.n_hidden = n_hidden
-        self.n_iterations = n_iterations
+        self.n_epochs = n_epochs
         self.learning_rate = learning_rate
         self.hidden_activation = Sigmoid()
         self.output_activation = Softmax()
@@ -101,7 +101,7 @@ class MultilayerPerceptron():
 
         self._initialize_weights(X, y)
 
-        for i in range(self.n_iterations):
+        for _ in range(self.n_epochs):
 
             # ..............
             #  Forward Pass
@@ -164,17 +164,33 @@ def main():
     X_test = X[800:]
     y_test = y[800:]
 
+    train_log = []
+    test_log = []
+
     # MLP
-    clf = MultilayerPerceptron(n_hidden=16,
-        n_iterations=1000,
+    clf = MultilayerPerceptron(n_hidden=15,
+        n_epochs=9400,
         learning_rate=0.01)
 
     clf.fit(X_train, y_train)
+    y_pred = np.argmax(clf.predict(X_train), axis=1)
+    y_train = np.argmax(y_train, axis=1)
+    train_log.append(accuracy_score(y_train, y_pred))
+
     y_pred = np.argmax(clf.predict(X_test), axis=1)
     y_test = np.argmax(y_test, axis=1)
+    test_log.append(accuracy_score(y_test, y_pred))
 
-    accuracy = accuracy_score(y_test, y_pred)
-    print ("Accuracy:", accuracy)
+    print("Train accuracy:", train_log[-1])
+    print("Test accuracy:", test_log[-1])
+
+    # plt.plot(train_log, label='train accuracy')
+    # plt.plot(test_log, label='test accuracy')
+    # plt.xlabel('num hidden layers')
+    # plt.ylabel('accuracy')
+    # plt.legend(loc='best')
+    # plt.grid()
+    # plt.show()
 
 if __name__ == "__main__":
     main()
