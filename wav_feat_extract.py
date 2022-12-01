@@ -112,5 +112,3 @@ def wav_extract(wav_in):
         index += 1
 
     return data
-
-wav_extract("data/genres_original/blues/blues.00002.wav")

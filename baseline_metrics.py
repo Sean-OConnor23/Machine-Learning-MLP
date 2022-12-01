@@ -94,4 +94,4 @@ def baseline_classifiers(csv_in):
 
 
 
-baseline_classifiers("features_30_sec.csv")
+baseline_classifiers("data/features_30_sec.csv")

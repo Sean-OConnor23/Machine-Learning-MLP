@@ -1,194 +1,223 @@
 import numpy as np
+import math
 import pandas as pd
 import matplotlib.pyplot as plt
-np.random.seed(42)
+from wav_feat_extract import wav_extract
 
-def get_genre(genres):
-    answers = []
-    for genre in genres:
-        if genre == "blues":
-            answers.append(0)
-        elif genre == "classical":
-            answers.append(1)
-        elif genre == "country":
-            answers.append(2)
-        elif genre == "disco":
-            answers.append(3)
-        elif genre == "hiphop":
-            answers.append(4)
-        elif genre == "jazz":
-            answers.append(5)
-        elif genre == "metal":
-            answers.append(6)
-        elif genre == "pop":
-            answers.append(7)
-        elif genre == "reggae":
-            answers.append(8)
-        elif genre == "rock":
-            answers.append(9)
-    return answers
+def accuracy_score(y_true, y_pred):
+    """ Compare y_true to y_pred and return the accuracy """
+    accuracy = np.sum(y_true == y_pred, axis=0) / len(y_true)
+    return accuracy
+
+def normalize(X, axis=-1, order=2):
+    """ Normalize the dataset X """
+    l2 = np.atleast_1d(np.linalg.norm(X, order, axis))
+    l2[l2 == 0] = 1
+    return X / np.expand_dims(l2, axis)
+
+def to_categorical(x, n_col=None):
+    """ One-hot encoding of nominal values """
+    if not n_col:
+        n_col = np.amax(x) + 1
+    one_hot = np.zeros((x.shape[0], n_col))
+    one_hot[np.arange(x.shape[0]), x] = 1
+    return one_hot
+
+class Sigmoid():
+    def __call__(self, x):
+        return 1 / (1 + np.exp(-x))
+
+    def gradient(self, x):
+        return self.__call__(x) * (1 - self.__call__(x))
+
+class Softmax():
+    def __call__(self, x):
+        e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
+        return e_x / np.sum(e_x, axis=-1, keepdims=True)
+
+    def gradient(self, x):
+        p = self.__call__(x)
+        return p * (1 - p)
+
+class Loss(object):
+    def loss(self, y_true, y_pred):
+        return NotImplementedError()
+
+    def gradient(self, y, y_pred):
+        raise NotImplementedError()
+
+    def acc(self, y, y_pred):
+        return 0
+
+class CrossEntropy(Loss):
+    def __init__(self): pass
+
+    def loss(self, y, p):
+        # Avoid division by zero
+        p = np.clip(p, 1e-15, 1 - 1e-15)
+        return - y * np.log(p) - (1 - y) * np.log(1 - p)
+
+    def acc(self, y, p):
+        return accuracy_score(np.argmax(y, axis=1), np.argmax(p, axis=1))
+
+    def gradient(self, y, p):
+        # Avoid division by zero
+        p = np.clip(p, 1e-15, 1 - 1e-15)
+        return - (y / p) + (1 - y) / (1 - p)
 
 
-class Layer:
-    # a layer is a building block of the neural network
-    # each layer is capable of performing a forward pass and a backward pass
-
-    def __init__(self):
-        pass
-
-    def forward(self, input):
-        # input: data of shape [batch, input_units]
-        # output: data of shape [batch, output_units]
-        return input
-
-    def backward(self, input, grad_output):
-        # backpropagation wrt given input (chain rule)
-
-        num_units = input.shape[1]
-        d_layer_d_input = np.eye(num_units)
-        return np.dot(grad_output, d_layer_d_input)
-
-
-# Nonlinearity ReLU layer
-class ReLU(Layer):
-    def __init__(self):
-        pass
-
-    def forward(self, input):
-        relu_forward = np.maximum(0, input)
-        return relu_forward
-
-    def backward(self, input, grad_output):
-        # compute gradient loss wrt ReLU input
-        relu_grad = input > 0
-        return grad_output*relu_grad
-
-
-# Dense layer
-#   f(X) = WX+b
-#      - X is an object-feature matrix of shape [batch_size, num_features]
-#      - W is a weight matrix pnum_features, num_outputs]
-#      - b is a vector of num_outputs biases
-class Dense(Layer):
-    def __init__(self, input_units, output_units, learning_rate=0.1):
+class MultilayerPerceptron():
+    """Multilayer Perceptron classifier. A fully-connected neural network with one hidden layer.
+    Unrolled to display the whole forward and backward pass.
+    Parameters:
+    -----------
+    n_hidden: int:
+        The number of processing nodes (neurons) in the hidden layer. 
+    n_iterations: float
+        The number of training iterations the algorithm will tune the weights for.
+    learning_rate: float
+        The step length that will be used when updating the weights.
+    """
+    def __init__(self, n_hidden, n_epochs=3000, learning_rate=0.01):
+        self.n_hidden = n_hidden
+        self.n_epochs = n_epochs
         self.learning_rate = learning_rate
-        self.weights = np.random.normal(loc=0.0, scale=np.sqrt(2/(input_units+output_units)), size=(input_units, output_units))
-        self.biases = np.zeros(output_units)
+        self.hidden_activation = Sigmoid()
+        self.output_activation = Softmax()
+        self.loss = CrossEntropy()
 
-    def forward(self, input):
-        # input shape: [batch, input_units]
-        # output shape: [batch, output_units]
-        # f(x) = WX+b
+    def _initialize_weights(self, X, y):
+        n_samples, n_features = X.shape
+        _, n_outputs = y.shape
+        # Hidden layer
+        limit   = 1 / math.sqrt(n_features)
+        self.W  = np.random.uniform(-limit, limit, (n_features, self.n_hidden))
+        self.w0 = np.zeros((1, self.n_hidden))
+        # Output layer
+        limit   = 1 / math.sqrt(self.n_hidden)
+        self.V  = np.random.uniform(-limit, limit, (self.n_hidden, n_outputs))
+        self.v0 = np.zeros((1, n_outputs))
 
-        return np.dot(input, self.weights) + self.biases
+    def fit(self, X, y):
 
-    def backward (self, input, grad_output):
-        grad_input = np.dot(grad_output, self.weights.T)
+        self._initialize_weights(X, y)
 
-        grad_weights = np.dot(input.T, grad_output)
-        grad_biases = grad_output.mean(axis=0)*input.shape[0]
-        
-        assert grad_weights.shape == self.weights.shape and grad_biases.shape == self.biases.shape
-        # stochastic gradient descent
-        self.weights = self.weights - self.learning_rate * grad_weights
-        self.biases = self.biases - self.learning_rate * grad_biases
+        for _ in range(self.n_epochs):
 
-        return grad_input
+            # ..............
+            #  Forward Pass
+            # ..............
 
-# Loss function
-def softmax_crossentropy_with_logits(logits, reference_answers):
-    logits_for_answers = logits[np.arange(len(logits)),reference_answers]
-    xentropy = - logits_for_answers + np.log(np.sum(np.exp(logits),axis=-1))
-    return xentropy
+            # HIDDEN LAYER
+            hidden_input = X.dot(self.W) + self.w0
+            hidden_output = self.hidden_activation(hidden_input)
+            # OUTPUT LAYER
+            output_layer_input = hidden_output.dot(self.V) + self.v0
+            y_pred = self.output_activation(output_layer_input)
 
-def grad_softmax_crossentropy_with_logits(logits, reference_answers):
-    ones_for_answers = np.zeros_like(logits)
-    ones_for_answers[np.arange(len(logits)), reference_answers] = 1
+            # ...............
+            #  Backward Pass
+            # ...............
 
-    softmax = np.exp(logits) / np.exp(logits).sum(axis=-1, keepdims=True)
+            # OUTPUT LAYER
+            # Grad. w.r.t input of output layer
+            grad_wrt_out_l_input = self.loss.gradient(y, y_pred) * self.output_activation.gradient(output_layer_input)
+            grad_v = hidden_output.T.dot(grad_wrt_out_l_input)
+            grad_v0 = np.sum(grad_wrt_out_l_input, axis=0, keepdims=True)
+            # HIDDEN LAYER
+            # Grad. w.r.t input of hidden layer
+            grad_wrt_hidden_l_input = grad_wrt_out_l_input.dot(self.V.T) * self.hidden_activation.gradient(hidden_input)
+            grad_w = X.T.dot(grad_wrt_hidden_l_input)
+            grad_w0 = np.sum(grad_wrt_hidden_l_input, axis=0, keepdims=True)
 
-    return (- ones_for_answers + softmax) / logits.shape[0]
-    
-# MLP
-# read data
-df = pd.read_csv("data/features_30_sec.csv")
-# shuffle data
-df = df.sample(frac=1).reset_index(drop=True)
-X = df.iloc[:,1:-1]
-y = df['label']
-y = y.replace(['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock'], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+            # Update weights (by gradient descent)
+            # Move against the gradient to minimize loss
+            self.V  -= self.learning_rate * grad_v
+            self.v0 -= self.learning_rate * grad_v0
+            self.W  -= self.learning_rate * grad_w
+            self.w0 -= self.learning_rate * grad_w0
 
-# split train and test data 80/20
-X_train = X.iloc[:800].to_numpy()
-y_train = y.iloc[:800].to_numpy()
+    # Use the trained model to predict labels of X
+    def predict(self, X):
+        # Forward pass:
+        hidden_input = X.dot(self.W) + self.w0
+        hidden_output = self.hidden_activation(hidden_input)
+        output_layer_input = hidden_output.dot(self.V) + self.v0
+        y_pred = self.output_activation(output_layer_input)
+        return y_pred
 
-X_test = X.iloc[800:].to_numpy()
-y_test = y.iloc[800:].to_numpy()
 
-network = []
-network.append(Dense(X_train.shape[1],100))
-network.append(ReLU())
-network.append(Dense(100,200))
-network.append(ReLU())
-network.append(Dense(200,10))
+def get_genre(songs):
+    genres = []
+    for song in songs:
+        if song == 0:
+            genres.append("blues")
+        elif song == 1:
+            genres.append("classical")
+        elif song == 2:
+            genres.append("country")
+        elif song == 3:
+            genres.append("disco")
+        elif song == 4:
+            genres.append("hiphop")
+        elif song == 5:
+            genres.append("jazz")
+        elif song == 6:
+            genres.append("metal")
+        elif song == 7:
+            genres.append("pop")
+        elif song == 8:
+            genres.append("reggae")
+        elif song == 9:
+            genres.append("rock")
+    return genres
 
-def forward(network, X):
-    activations = []
-    input = X
 
-    for l in network:
-        activations.append(l.forward(input))
-        input = activations[-1]
+def main():
+    # read data
+    df = pd.read_csv("data/features_30_sec.csv")
+    # shuffle data
+    df = df.sample(frac=1).reset_index(drop=True)
+    X = df.iloc[:,1:-1].to_numpy()
+    X = normalize(X)
+    y = df['label']
+    y = y.replace(['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock'], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    y = to_categorical(y.to_numpy())
 
-    assert len(activations) == len(network)
-    return activations
+    # split train and test data 80/20
+    X_train = X[:800]
+    y_train = y[:800]
 
-def predict(network, X):
-    logits = forward(network, X)[-1]
-    return logits.argmax(axis=-1)
+    X_test = X[800:]
+    y_test = y[800:]
 
-def train(network, X, y):
-    layer_activations = forward(network, X)
-    layer_inputs = [X] + layer_activations
-    logits = layer_activations[-1]
+    train_log = []
+    test_log = []
 
-    loss = softmax_crossentropy_with_logits(logits, y)
-    loss_grad = grad_softmax_crossentropy_with_logits(logits, y)
+    # MLP
+    clf = MultilayerPerceptron(n_hidden=15,
+        n_epochs=9400,
+        learning_rate=0.01)
 
-    for layer_index in range(len(network))[::-1]:
-        layer = network[layer_index]
-        loss_grad = layer.backward(layer_inputs[layer_index], loss_grad) # grad wrt input
+    clf.fit(X_train, y_train)
+    y_pred = np.argmax(clf.predict(X_train), axis=1)
+    y_train = np.argmax(y_train, axis=1)
+    train_log.append(accuracy_score(y_train, y_pred))
 
-    return np.mean(loss)
+    y_pred = np.argmax(clf.predict(X_test), axis=1)
+    y_test = np.argmax(y_test, axis=1)
+    test_log.append(accuracy_score(y_test, y_pred))
 
-from tqdm import trange
-def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
-    assert len(inputs) == len(targets)
-    if shuffle:
-        indices = np.random.permutation(len(inputs))
-    for start_idx in trange(0, len(inputs) - batchsize + 1, batchsize):
-        if shuffle:
-            excerpt = indices[start_idx:start_idx + batchsize]
-        else:
-            excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt]
-
-from IPython.display import clear_output
-train_log = []
-test_log = []
-
-for epoch in range(25):
-    for x_batch, y_batch in iterate_minibatches(X_train, y_train, batchsize=32, shuffle=True):
-        train(network, x_batch, y_batch)
-    
-    train_log.append(np.mean(predict(network, X_train)==y_train))
-    test_log.append(np.mean(predict(network,X_test)==y_test))
-
-    print("Epoch", epoch)
     print("Train accuracy:", train_log[-1])
     print("Test accuracy:", test_log[-1])
-    plt.plot(train_log, label='train accuracy')
-    plt.plot(test_log, label='test accuracy')
-    plt.legend(loc='best')
-    plt.grid()
-    plt.show()
+
+    # plt.plot(train_log, label='train accuracy')
+    # plt.plot(test_log, label='test accuracy')
+    # plt.xlabel('num hidden layers')
+    # plt.ylabel('accuracy')
+    # plt.legend(loc='best')
+    # plt.grid()
+    # plt.show()
+
+if __name__ == "__main__":
+    main()
