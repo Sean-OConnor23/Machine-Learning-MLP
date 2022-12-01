@@ -2,6 +2,7 @@ import numpy as np
 import math
 import pandas as pd
 import matplotlib.pyplot as plt
+from wav_feat_extract import wav_extract
 
 def accuracy_score(y_true, y_pred):
     """ Compare y_true to y_pred and return the accuracy """
@@ -146,6 +147,32 @@ class MultilayerPerceptron():
         return y_pred
 
 
+def get_genre(songs):
+    genres = []
+    for song in songs:
+        if song == 0:
+            genres.append("blues")
+        elif song == 1:
+            genres.append("classical")
+        elif song == 2:
+            genres.append("country")
+        elif song == 3:
+            genres.append("disco")
+        elif song == 4:
+            genres.append("hiphop")
+        elif song == 5:
+            genres.append("jazz")
+        elif song == 6:
+            genres.append("metal")
+        elif song == 7:
+            genres.append("pop")
+        elif song == 8:
+            genres.append("reggae")
+        elif song == 9:
+            genres.append("rock")
+    return genres
+
+
 def main():
     # read data
     df = pd.read_csv("data/features_30_sec.csv")
@@ -177,12 +204,17 @@ def main():
     y_train = np.argmax(y_train, axis=1)
     train_log.append(accuracy_score(y_train, y_pred))
 
-    y_pred = np.argmax(clf.predict(X_test), axis=1)
-    y_test = np.argmax(y_test, axis=1)
-    test_log.append(accuracy_score(y_test, y_pred))
+    data = wav_extract("data/genres_original/country/country.00004.wav")
+    data = normalize(data)
 
-    print("Train accuracy:", train_log[-1])
-    print("Test accuracy:", test_log[-1])
+    y_pred = np.argmax(clf.predict(data), axis=1)
+    print(get_genre(y_pred))
+
+    # y_test = np.argmax(y_test, axis=1)
+    # test_log.append(accuracy_score(y_test, y_pred))
+
+    # print("Train accuracy:", train_log[-1])
+    # print("Test accuracy:", test_log[-1])
 
     # plt.plot(train_log, label='train accuracy')
     # plt.plot(test_log, label='test accuracy')
