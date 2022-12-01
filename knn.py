@@ -15,11 +15,6 @@ y = y.replace(['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'meta
 # split train and test data
 X_train,X_test,y_train,y_test = train_test_split(X,y,test_size=0.4,random_state=42, stratify=y)
 
-neighbors = np.arange(1,9)
-train_accuracy = np.empty(len(neighbors))
-test_accuracy = np.empty(len(neighbors))
-
-
 knn = KNeighborsClassifier(n_neighbors=8)
 knn.fit(X_train, y_train)
 
