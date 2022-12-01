@@ -111,4 +111,4 @@ def wav_extract(wav_in):
         data.append(temp_var)
         index += 1
 
-    return data
+    return np.array(data)

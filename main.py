@@ -4,7 +4,7 @@ from multi_layered_perceptron import *
 
 def main():
   # load training data
-  df_train = pd.read_csv("features_30_sec.csv")
+  df_train = pd.read_csv("data/features_30_sec.csv")
   df_train['label'] = df_train['label'].replace(['blues', 'classical', 'country', 'disco', 'hiphop', 'jazz', 'metal', 'pop', 'reggae', 'rock'], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
   # shuffle the data
   df_train = shuffle_rows(df_train)
