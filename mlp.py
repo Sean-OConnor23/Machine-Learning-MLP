@@ -79,7 +79,7 @@ def get_genre(songs):
 # MULTILAYER PERCEPTRON
 # DATA
 # read data
-df = pd.read_csv("data/features_30_sec.csv")
+df = pd.read_csv("data/features_3_sec.csv")
 # preprocess data
 df = df.sample(frac=1).reset_index(drop=True) # shuffle data
 X = normalize(df.iloc[:,1:-1].to_numpy()) # normalize
